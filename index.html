@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ERP Dashboard — Full Corrected</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.2.2/dist/full.css" rel="stylesheet" />
+
+    <!-- Chart.js + datalabels plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <!-- XLSX for exports -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.1/xlsx.full.min.js"></script>
+
+    <style>
+      body {
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .sticky-header {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 20;
+      }
+
+      .table-wrap {
+        max-height: 520px;
+        overflow: auto;
+        border-radius: 6px;
+      }
+
+      th {
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .loader-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.35);
+        z-index: 60;
+      }
+
+      .chart-canvas {
+        width: 100% !important;
+        height: 320px !important;
+      }
+
+      .dropdown-preview {
+        min-width: 220px;
+        max-width: 320px;
+        white-space: normal;
+      }
+
+      .small {
+        font-size: 0.85rem;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+
+  <body class="bg-gray-100 p-4">
+    <h1 class="text-2xl md:text-3xl font-bold mb-4 text-center">Advanced ERP Dashboard — Fixed & Extended</h1>
+
+    <!-- Top: token and date -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <input id="tokenInput" class="input input-bordered" placeholder="Paste API token here (Save token)" />
+      <button id="saveTokenBtn" class="btn btn-primary">Save Token</button>
+    </div>
+    <div class="flex gap-3 items-center my-8">
+      <label class="small">Start</label>
+      <input id="startDate" type="date" class="input input-bordered" />
+      <label class="small">End</label>
+      <input id="endDate" type="date" class="input input-bordered" />
+      <button id="fetchBtn" class="btn btn-success">Fetch Data</button>
+    </div>
+
+    <!-- Filters row: dropdown filters + simple selects + search -->
+    <div class="flex gap-2 flex-wrap items-center mb-3">
+      <!-- Dropdown filter buttons with preview -->
+      <div class="relative">
+        <button id="catBtn" class="btn btn-outline small dropdown-preview">Category</button>
+        <div id="catMenu" class="absolute left-0 mt-2 p-2 bg-white shadow rounded w-64 max-h-64 overflow-auto hidden">
+          <div class="flex justify-between items-center mb-2">
+            <div class="font-medium">Categories</div>
+            <button id="catSelectAll" class="btn btn-ghost btn-xs">All</button>
+          </div>
+          <div id="catList"></div>
+        </div>
+      </div>
+
+      <div class="relative">
+        <button id="subBtn" class="btn btn-outline small dropdown-preview">Subcategory</button>
+        <div id="subMenu" class="absolute left-0 mt-2 p-2 bg-white shadow rounded w-64 max-h-64 overflow-auto hidden">
+          <div class="flex justify-between items-center mb-2">
+            <div class="font-medium">Subcategories</div>
+            <button id="subSelectAll" class="btn btn-ghost btn-xs">All</button>
+          </div>
+          <div id="subList"></div>
+        </div>
+      </div>
+
+      <div class="relative">
+        <button id="mktBtn" class="btn btn-outline small dropdown-preview">Marketing</button>
+        <div id="mktMenu" class="absolute left-0 mt-2 p-2 bg-white shadow rounded w-64 max-h-64 overflow-auto hidden">
+          <div class="flex justify-between items-center mb-2">
+            <div class="font-medium">Marketing</div>
+            <button id="mktSelectAll" class="btn btn-ghost btn-xs">All</button>
+          </div>
+          <div id="mktList"></div>
+        </div>
+      </div>
+
+      <div class="relative">
+        <button id="custBtn" class="btn btn-outline small dropdown-preview">Customer</button>
+        <div id="custMenu" class="absolute left-0 mt-2 p-2 bg-white shadow rounded w-64 max-h-64 overflow-auto hidden">
+          <div class="flex justify-between items-center mb-2">
+            <div class="font-medium">Customer</div>
+            <button id="custSelectAll" class="btn btn-ghost btn-xs">All</button>
+          </div>
+          <div id="custList"></div>
+        </div>
+      </div>
+
+      <!-- simple selects -->
+      <select id="piFilter" class="select select-bordered w-44">
+        <option value="">All PI</option>
+        <option value="hasPI">Has PI</option>
+        <option value="noPI">No PI</option>
+      </select>
+
+      <select id="balFilter" class="select select-bordered w-44">
+        <option value="">All Balance</option>
+        <option value="hasBalance">Balance &gt; 0</option>
+        <option value="zeroBalance">Balance = 0</option>
+      </select>
+
+      <input id="searchInput" class="input input-bordered flex-1 min-w-[180px]" placeholder="Search (global)" />
+
+      <button id="resetBtn" class="btn btn-warning small">Reset</button>
+    </div>
+
+    <!-- Color and highlight toggles -->
+    <div class="flex gap-4 items-center mb-4 flex-wrap">
+      <label class="flex items-center gap-2">
+        <input id="rowNoPI" type="checkbox" checked />
+        Highlight row No PI
+      </label>
+      <input id="colColorNoPI" type="color" value="#ffb4b4" />
+      <label class="flex items-center gap-2">
+        <input id="rowBalance" type="checkbox" checked />
+        Highlight row Balance>0
+      </label>
+      <input id="colColorBalance" type="color" value="#fff3bf" />
+      <label class="flex items-center gap-2">
+        <input id="rowHighest" type="checkbox" checked />
+        Highlight row Highest Order
+      </label>
+      <input id="colColorHighest" type="color" value="#c7f9cc" />
+      <div class="divider vertical"></div>
+      <button id="columnToggleBtn" class="btn btn-info small">Column toggle</button>
+      <label class="flex items-center gap-2 ml-2">
+        Pagination
+        <input id="togglePagination" type="checkbox" class="checkbox" checked />
+      </label>
+      <select id="perPage" class="select select-bordered w-24">
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50" selected>50</option>
+      </select>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-2 items-center mb-3 flex-wrap">
+      <button id="chartsBtn" class="btn btn-accent">View Charts</button>
+      <button id="expPage" class="btn btn-primary">Export Current</button>
+      <button id="expAll" class="btn btn-secondary">Export All Filtered</button>
+      <button id="expUnique" class="btn btn-success">Export Unique Orders</button>
+
+      <div class="ml-auto flex gap-2 items-center">
+        <button id="exportSummaryBtn" class="btn btn-ghost small">Export Summary</button>
+      </div>
+    </div>
+
+    <!-- Loader -->
+    <div id="loader" class="loader-overlay hidden">
+      <div class="bg-white rounded p-4 shadow text-center w-64">
+        <div id="loaderText" class="font-semibold">Loading...</div>
+        <div id="loaderProgress" class="text-sm mt-2">0 / 0</div>
+      </div>
+    </div>
+
+    <!-- Summary panel -->
+    <div id="summaryPanel" class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4"></div>
+    <!-- ///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////// -->
+
+    <div id="topLists" class="flex gap-3 mb-4 flex-wrap w-full">
+      <!-- Top lists -->
+      <!-- <div class="flex gap-3 mb-4 flex-wrap w-full">
+        <ul class="bg-white rounded shadow-lg w-full md:w-1/3">
+          <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Top Marketing</li>
+
+          <li class="flex justify-between items-center px-4 mb-1 border-b border-gray-300 hover:shadow-md transition">
+            <div>
+              MD ROHIT HASAN :
+              <span class="font-bold">2,416.4</span>
+            </div>
+            <div class="uppercase font-semibold opacity-60">98%</div>
+          </li>
+
+          <li class="flex justify-between items-center px-4 border-b border-gray-300 hover:shadow-md transition">
+            <div>
+              Md. Abdul Halim :
+              <span class="font-bold">2,376</span>
+            </div>
+            <div class="uppercase font-semibold opacity-60">95%</div>
+          </li>
+        </ul>
+      </div> -->
+    </div>
+    <!-- Table container with scroll -->
+    <div class="table-wrap bg-white rounded shadow mb-3">
+      <table id="mainTable" class="table table-compact w-full">
+        <thead id="tableHead" class="sticky-header"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Pager -->
+    <div id="pager" class="flex justify-center items-center gap-2 mb-6"></div>
+
+    <!-- Column modal -->
+    <div id="colModal" class="modal">
+      <div class="modal-box w-96">
+        <h3 class="font-bold text-lg">Toggle Columns & Column Highlight</h3>
+        <div id="colList" class="grid grid-cols-2 gap-2 mt-3"></div>
+        <div class="modal-action">
+          <button id="applyColBtn" class="btn btn-primary">Apply</button>
+          <button id="closeColBtn" class="btn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts modal -->
+    <div id="chartsModal" class="modal chart-modal">
+      <div class="modal-box w-11/12 max-w-6xl">
+        <h3 class="font-bold text-lg mb-2">Charts — select context</h3>
+
+        <div class="flex gap-2 mb-3 flex-wrap items-center">
+          <label class="small">Context for charts:</label>
+          <select id="chartContext" class="select select-bordered w-48">
+            <option value="all">All</option>
+            <option value="marketing">Marketing</option>
+            <option value="customer">Customer</option>
+            <option value="section">Section</option>
+          </select>
+          <select id="chartContextVal" class="select select-bordered w-64">
+            <option value="">(auto)</option>
+          </select>
+
+          <label class="flex items-center gap-2">
+            <input id="chartTopN" type="number" class="input input-bordered w-20" value="10" min="1" />
+            Top N
+          </label>
+
+          <div class="ml-auto flex gap-2">
+            <button id="downloadChartBtn" class="btn btn-primary btn-small">Download Visible Chart</button>
+            <button id="printChartsBtn" class="btn btn-ghost btn-small">Print</button>
+            <button id="closeChartsBtn" class="btn">Close</button>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-2 mb-3">
+          <button class="tab tab-active" data-pane="cat">Category</button>
+          <button class="tab" data-pane="time">Time (day/week/month)</button>
+          <button class="tab" data-pane="pi">PI status</button>
+          <button class="tab" data-pane="marketing">Marketing</button>
+          <button class="tab" data-pane="customer">Customer</button>
+          <button class="tab" data-pane="section">Section</button>
+        </div>
+
+        <div id="chartPane_cat" class="chart-pane">
+          <canvas id="chart_cat" class="chart-canvas"></canvas>
+        </div>
+        <div id="chartPane_time" class="chart-pane hidden">
+          <div class="flex gap-2 mb-2 items-center">
+            <label>Period</label>
+            <select id="timePeriod" class="select select-bordered w-32">
+              <option value="month" selected>Month</option>
+              <option value="week">Week</option>
+              <option value="day">Day</option>
+            </select>
+          </div>
+          <canvas id="chart_time" class="chart-canvas"></canvas>
+        </div>
+        <div id="chartPane_pi" class="chart-pane hidden">
+          <canvas id="chart_pi" class="chart-canvas"></canvas>
+        </div>
+        <div id="chartPane_marketing" class="chart-pane hidden">
+          <canvas id="chart_marketing" class="chart-canvas"></canvas>
+        </div>
+        <div id="chartPane_customer" class="chart-pane hidden">
+          <canvas id="chart_customer" class="chart-canvas"></canvas>
+        </div>
+        <div id="chartPane_section" class="chart-pane hidden">
+          <canvas id="chart_section" class="chart-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* ============================
+                                                                                             Globals & initial setup
+                                                                                             ============================ */
+      let allData = []; // raw rows from API
+      let filtered = []; // filtered rows
+      let currentPage = 1;
+      let perPage = parseInt(document.getElementById("perPage").value || 50);
+      let paginationOn = true;
+      let columns = []; // column defs
+      let colVisible = []; // boolean per column
+      let colHighlight = []; // boolean per column (from column modal)
+      let sortConfig = {
+        idx: -1,
+        dir: 1,
+      }; // sorting
+
+      // Chart instances
+      let chart_cat, chart_time, chart_pi, chart_marketing, chart_customer, chart_section;
+
+      /* -------------------------
+                           Column definitions
+                           Each has label and array of potential keys (try in order)
+                        -------------------------*/
+      function initColumns() {
+        columns = [
+          {
+            label: "SL",
+            keys: [],
+          },
+          {
+            label: "Order Date",
+            keys: ["OrderReceiveDate", "OrderDate"],
+          },
+          {
+            label: "Work Order No",
+            keys: ["WorkOrderNo"],
+          },
+          {
+            label: "Job Card No",
+            keys: ["JobCardNo"],
+          },
+          {
+            label: "Marketing",
+            keys: ["MarketingName"],
+          },
+          {
+            label: "Customer",
+            keys: ["CName"],
+          },
+          {
+            label: "Factory",
+            keys: ["FName", "FactoryName"],
+          },
+          {
+            label: "Buyer",
+            keys: ["BuyerName"],
+          },
+          {
+            label: "Category",
+            keys: ["ProductCategoryName"],
+          },
+          {
+            label: "Sub Category",
+            keys: ["ProductSubCategoryName"],
+          },
+          {
+            label: "PO No",
+            keys: ["CustomerPONo", "PONo"],
+          },
+          {
+            label: "Item Desc",
+            keys: ["ItemDescription", "ItemDesc"],
+          },
+          {
+            label: "PI",
+            keys: ["CustomerPINo"],
+          },
+          {
+            label: "Unit Price",
+            keys: ["UnitPrice"],
+          },
+          {
+            label: "Order Qty",
+            keys: ["BreakDownQTY", "OrderQty"],
+          },
+          {
+            label: "Order Value",
+            keys: ["TotalOrderValue", "OrderValue"],
+          },
+          {
+            label: "Challan Qty",
+            keys: ["ChallanQTY"],
+          },
+          {
+            label: "Challan Value",
+            keys: ["ChallanValue"],
+          },
+          {
+            label: "Balance Qty",
+            keys: ["BalanceQTY"],
+          },
+          {
+            label: "Balance Value",
+            keys: ["BalanceValue"],
+          },
+        ];
+        colVisible = columns.map(() => true);
+        colHighlight = columns.map(() => false);
+        renderTableHead();
+        renderColModal();
+      }
+
+      /* safe accessor: tries keys in order */
+      function getVal(row, keys, fallback = "") {
+        for (const k of keys) {
+          if (k === "SL") continue;
+          if (row === undefined) continue;
+          if (row[k] !== undefined && row[k] !== null) return row[k];
+        }
+        return fallback;
+      }
+
+      /* format date nicely */
+      function formatDate(d) {
+        if (!d) return "";
+        const dt = new Date(d);
+        if (isNaN(dt)) return d;
+        return dt.toLocaleDateString();
+      }
+
+      function formatNumber(n) {
+        if (n === null || n === undefined) return "";
+        return Number(n).toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        });
+      }
+
+      /* -------------------------
+                           UI helpers for dropdowns
+                        -------------------------*/
+      function toggleMenu(btnId, menuId) {
+        const btn = document.getElementById(btnId);
+        const menu = document.getElementById(menuId);
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const show = menu.classList.contains("hidden");
+          document.querySelectorAll("#catMenu,#subMenu,#mktMenu,#custMenu").forEach((m) => m.classList.add("hidden"));
+          if (show) menu.classList.remove("hidden");
+          else menu.classList.add("hidden");
+        });
+      }
+      document.body.addEventListener("click", () => {
+        ["catMenu", "subMenu", "mktMenu", "custMenu"].forEach((id) =>
+          document.getElementById(id)?.classList.add("hidden")
+        );
+      });
+
+      /* -------------------------
+                           Fill filter dropdowns
+                        -------------------------*/
+      function uniqueSorted(arr) {
+        return [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+      }
+
+      function fillFilterLists() {
+        const cats = uniqueSorted(allData.map((r) => r.ProductCategoryName));
+        const subs = uniqueSorted(allData.map((r) => r.ProductSubCategoryName));
+        const mkts = uniqueSorted(allData.map((r) => r.MarketingName));
+        const custs = uniqueSorted(allData.map((r) => r.CName));
+
+        const fillList = (containerId, items) => {
+          const el = document.getElementById(containerId);
+          if (!el) return;
+          el.innerHTML = items
+            .map((it) => {
+              const v = String(it).replace(/"/g, "&quot;");
+              return `<label class="flex items-center gap-2"><input type="checkbox" value="${v}"> ${v}</label>`;
+            })
+            .join("");
+          el.querySelectorAll("input[type=checkbox]").forEach((cb) =>
+            cb.addEventListener("change", () => {
+              updateDropdownPreview(containerId);
+              applyFilters();
+            })
+          );
+        };
+
+        fillList("catList", cats);
+        fillList("subList", subs);
+        fillList("mktList", mkts);
+        fillList("custList", custs);
+
+        // select all buttons
+        document.getElementById("catSelectAll").onclick = () => {
+          document.querySelectorAll("#catList input").forEach((i) => (i.checked = true));
+          updateDropdownPreview("catList");
+          applyFilters();
+        };
+        document.getElementById("subSelectAll").onclick = () => {
+          document.querySelectorAll("#subList input").forEach((i) => (i.checked = true));
+          updateDropdownPreview("subList");
+          applyFilters();
+        };
+        document.getElementById("mktSelectAll").onclick = () => {
+          document.querySelectorAll("#mktList input").forEach((i) => (i.checked = true));
+          updateDropdownPreview("mktList");
+          applyFilters();
+        };
+        document.getElementById("custSelectAll").onclick = () => {
+          document.querySelectorAll("#custList input").forEach((i) => (i.checked = true));
+          updateDropdownPreview("custList");
+          applyFilters();
+        };
+
+        updateDropdownPreview("catList");
+        updateDropdownPreview("subList");
+        updateDropdownPreview("mktList");
+        updateDropdownPreview("custList");
+      }
+
+      /* Show preview on the button (like "3 selected" or list of first 2) */
+      function updateDropdownPreview(listId) {
+        const checked = Array.from(document.querySelectorAll(`#${listId} input:checked`)).map((i) => i.value);
+        const preview =
+          checked.length === 0
+            ? "All"
+            : checked.length <= 2
+            ? checked.join(", ")
+            : `${checked[0]}, ${checked[1]} (+${checked.length - 2})`;
+        if (listId === "catList") document.getElementById("catBtn").innerText = `Category: ${preview}`;
+        if (listId === "subList") document.getElementById("subBtn").innerText = `Subcat: ${preview}`;
+        if (listId === "mktList") document.getElementById("mktBtn").innerText = `Mkt: ${preview}`;
+        if (listId === "custList") document.getElementById("custBtn").innerText = `Cust: ${preview}`;
+      }
+
+      /* -------------------------
+                           Fetch & loader
+                        -------------------------*/
+      function showLoader(total = 0, loaded = 0) {
+        document.getElementById("loader").classList.remove("hidden");
+        document.getElementById("loaderText").innerText = "Loading...";
+        document.getElementById("loaderProgress").innerText = `${loaded} / ${total}`;
+      }
+
+      function updateLoader(loaded, total) {
+        document.getElementById("loaderProgress").innerText = `${loaded} / ${total}`;
+      }
+
+      function hideLoader() {
+        document.getElementById("loader").classList.add("hidden");
+      }
+
+      document.getElementById("saveTokenBtn").addEventListener("click", () => {
+        const token = document.getElementById("tokenInput").value.trim();
+        if (!token) return alert("Enter token");
+        localStorage.setItem("erp_token", token);
+        alert("Token saved locally");
+      });
+
+      document.getElementById("fetchBtn").addEventListener("click", async () => {
+        const token = localStorage.getItem("erp_token");
+        if (!token) return alert("Save token first (enter token and click Save Token)");
+        const sd = document.getElementById("startDate").value;
+        const ed = document.getElementById("endDate").value;
+        if (!sd || !ed) return alert("Select start and end date");
+        showLoader(0, 0);
+        try {
+          const url = `https://tpl-api.ebs365.info/api/OrderReport/BI_OrderRelatedInformationReport?CompanyID=1&ProductCategoryID=0&ProductSubCategoryID=0&MarketingID=0&CustomerID=0&BuyerID=0&JobCardID=0&StartDate=${new Date(
+            sd
+          ).toISOString()}&EndDate=${new Date(ed).toISOString()}&CommandID=5&EmpID=0`;
+          const res = await fetch(url, {
+            headers: {
+              Authorization: token,
+            },
+          });
+          const body = await res.json();
+          // adapt if API wraps data
+          allData = Array.isArray(body) ? body : body.Data || body || [];
+          // normalize fields & numeric conversion
+          allData.forEach((r) => {
+            if (r.OrderReceiveDate && !r.OrderDate) r.OrderDate = r.OrderReceiveDate;
+            // numeric conversions
+            [
+              "UnitPrice",
+              "BreakDownQTY",
+              "OrderQty",
+              "TotalOrderValue",
+              "OrderValue",
+              "ChallanQTY",
+              "ChallanValue",
+              "BalanceQTY",
+              "BalanceValue",
+            ].forEach((k) => {
+              if (r[k] !== undefined && typeof r[k] === "string") {
+                const n = parseFloat(String(r[k]).replace(/,/g, ""));
+                if (!isNaN(n)) r[k] = n;
+              }
+            });
+          });
+          initColumns();
+          fillFilterLists();
+          applyFilters();
+        } catch (e) {
+          console.error(e);
+          alert("Fetch failed — check console");
+        } finally {
+          hideLoader();
+        }
+      });
+
+      /* -------------------------
+                           Filter logic & apply
+                        -------------------------*/
+      function readChecked(id) {
+        return Array.from(document.querySelectorAll(`#${id} input:checked`)).map((i) => i.value);
+      }
+
+      function applyFilters() {
+        // read filters
+        const cats = readChecked("catList");
+        const subs = readChecked("subList");
+        const mkts = readChecked("mktList");
+        const custs = readChecked("custList");
+        const pi = document.getElementById("piFilter").value;
+        const bal = document.getElementById("balFilter").value;
+        const sq = (document.getElementById("searchInput").value || "").toLowerCase();
+
+        filtered = allData.filter((r) => {
+          const hasPI = r.CustomerPINo && String(r.CustomerPINo).trim() !== "";
+          const matches =
+            (!cats.length || cats.includes(r.ProductCategoryName)) &&
+            (!subs.length || subs.includes(r.ProductSubCategoryName)) &&
+            (!mkts.length || mkts.includes(r.MarketingName)) &&
+            (!custs.length || custs.includes(r.CName)) &&
+            (!pi || (pi === "hasPI" ? hasPI : !hasPI)) &&
+            (!bal || (bal === "hasBalance" ? Number(r.BalanceQTY || 0) > 0 : Number(r.BalanceQTY || 0) === 0)) &&
+            (!sq ||
+              Object.values(r).some((v) =>
+                String(v || "")
+                  .toLowerCase()
+                  .includes(sq)
+              ));
+          return matches;
+        });
+
+        // update previews
+        ["catList", "subList", "mktList", "custList"].forEach(updateDropdownPreview);
+
+        currentPage = 1;
+        renderTable();
+        renderSummary();
+        renderTopLists();
+        renderAllCharts();
+      }
+
+      /* Reset */
+      document.getElementById("resetBtn").addEventListener("click", () => {
+        // clear dropdowns
+        ["catList", "subList", "mktList", "custList"].forEach((id) =>
+          document.querySelectorAll(`#${id} input`).forEach((i) => (i.checked = false))
+        );
+        document.getElementById("piFilter").value = "";
+        document.getElementById("balFilter").value = "";
+        document.getElementById("searchInput").value = "";
+        ["catList", "subList", "mktList", "custList"].forEach(updateDropdownPreview);
+        applyFilters();
+      });
+
+      /* -------------------------
+                           Table header & render
+                        -------------------------*/
+      function renderTableHead() {
+        const thead = document.getElementById("tableHead");
+        thead.innerHTML = "";
+        const tr = document.createElement("tr");
+        columns.forEach((c, idx) => {
+          const th = document.createElement("th");
+          th.className = "p-2 text-left";
+          // show label + sort arrow
+          let arrow = "";
+          if (sortConfig.idx === idx) arrow = sortConfig.dir === 1 ? " ▲" : " ▼";
+          th.innerText = c.label + arrow;
+          th.addEventListener("click", () => {
+            if (sortConfig.idx === idx) sortConfig.dir *= -1;
+            else {
+              sortConfig.idx = idx;
+              sortConfig.dir = 1;
+            }
+            renderTable();
+          });
+          tr.appendChild(th);
+        });
+        thead.appendChild(tr);
+      }
+
+      /* render column modal list */
+      function renderColModal() {
+        const container = document.getElementById("colList");
+        container.innerHTML = "";
+        columns.forEach((c, i) => {
+          const id = `colchk_${i}`;
+          const wrapper = document.createElement("label");
+          wrapper.className = "flex items-center gap-2";
+          wrapper.innerHTML = `<input id="${id}" type="checkbox" ${colVisible[i] ? "checked" : ""}/> ${c.label}
+                        <input type="checkbox" id="colhl_${i}" ${
+            colHighlight[i] ? "checked" : ""
+          } class="ml-auto" title="Highlight whole column"/>`;
+          container.appendChild(wrapper);
+        });
+      }
+      document.getElementById("columnToggleBtn").addEventListener("click", () => {
+        renderColModal();
+        document.getElementById("colModal").classList.add("modal-open");
+      });
+      document
+        .getElementById("closeColBtn")
+        .addEventListener("click", () => document.getElementById("colModal").classList.remove("modal-open"));
+      document.getElementById("applyColBtn").addEventListener("click", () => {
+        columns.forEach((c, i) => {
+          const chk = document.getElementById(`colchk_${i}`);
+          const hl = document.getElementById(`colhl_${i}`);
+          if (chk) colVisible[i] = chk.checked;
+          if (hl) colHighlight[i] = hl.checked;
+        });
+        document.getElementById("colModal").classList.remove("modal-open");
+        renderTable();
+      });
+
+      /* Render table rows */
+      function renderTable() {
+        renderTableHead();
+        const tbody = document.getElementById("tableBody");
+        tbody.innerHTML = "";
+
+        // sort filtered copy
+        const data = [...filtered];
+        if (sortConfig.idx >= 0) {
+          const map = {
+            1: ["OrderReceiveDate", "OrderDate"],
+            2: ["WorkOrderNo"],
+            3: ["JobCardNo"],
+            4: ["MarketingName"],
+            5: ["CName"],
+            6: ["FName", "FactoryName"],
+            7: ["BuyerName"],
+            8: ["ProductCategoryName"],
+            9: ["ProductSubCategoryName"],
+            10: ["CustomerPONo", "PONo"],
+            11: ["ItemDescription", "ItemDesc"],
+            12: ["CustomerPINo"],
+            13: ["UnitPrice"],
+            14: ["BreakDownQTY", "OrderQty"],
+            15: ["TotalOrderValue", "OrderValue"],
+            16: ["ChallanQTY"],
+            17: ["ChallanValue"],
+            18: ["BalanceQTY"],
+            19: ["BalanceValue"],
+          };
+          const keys = map[sortConfig.idx];
+          if (keys) {
+            data.sort((a, b) => {
+              const va = getVal(a, keys, "");
+              const vb = getVal(b, keys, "");
+              const na = parseFloat(va),
+                nb = parseFloat(vb);
+              if (!isNaN(na) && !isNaN(nb)) return sortConfig.dir * (na - nb);
+              return sortConfig.dir * String(va).localeCompare(String(vb));
+            });
+          }
+        }
+
+        // pagination
+        perPage = parseInt(document.getElementById("perPage").value || 50);
+        paginationOn = document.getElementById("togglePagination").checked;
+        const start = (currentPage - 1) * perPage;
+        const pageRows = paginationOn ? data.slice(start, start + perPage) : data;
+
+        // compute unique map for highest etc.
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        const highestOrderVal = Math.max(0, ...Object.values(uniqueMap).map((u) => u.totalOrderValue || 0));
+
+        pageRows.forEach((r, idx) => {
+          const tr = document.createElement("tr");
+          const noPI = !(r.CustomerPINo && String(r.CustomerPINo).trim() !== "");
+          const hasBalance = Number(r.BalanceQTY || 0) > 0;
+          const orderVal = Number(getVal(r, ["TotalOrderValue", "OrderValue"]) || 0);
+          const isHighest = orderVal === highestOrderVal;
+
+          // cells built according to columns[]; if column hidden, hide cell
+          columns.forEach((col, ci) => {
+            const td = document.createElement("td");
+            td.className = "p-2";
+            let val = "";
+            if (ci === 0) val = start + idx + 1;
+            else {
+              val = getVal(r, col.keys, "");
+              // format
+              if ([13, 14, 15, 16, 17, 18, 19].includes(ci)) {
+                // numeric
+                const n = Number(val);
+                val = isNaN(n) ? val : formatNumber(n);
+              }
+              if (ci === 1) val = formatDate(val);
+            }
+            td.textContent = val;
+            if (!colVisible[ci]) td.style.display = "none";
+            tr.appendChild(td);
+          });
+
+          // row highlights (entire row)
+          if (document.getElementById("rowNoPI").checked && noPI) {
+            tr.style.backgroundColor = document.getElementById("colColorNoPI").value;
+          }
+          if (document.getElementById("rowBalance").checked && hasBalance) {
+            tr.style.backgroundColor = document.getElementById("colColorBalance").value;
+          }
+          if (document.getElementById("rowHighest").checked && isHighest) {
+            tr.style.backgroundColor = document.getElementById("colColorHighest").value;
+          }
+
+          // column highlight (apply to td cells matching colHighlight)
+          columns.forEach((c, ci) => {
+            if (colHighlight[ci]) {
+              const cell = tr.children[ci];
+              if (cell) cell.style.boxShadow = "inset 0 0 0 9999px rgba(255,255,0,0.05)";
+            }
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        renderPager(data.length);
+      }
+
+      /* -------------------------
+                           Pagination UI
+                        -------------------------*/
+      function renderPager(totalRows) {
+        const pager = document.getElementById("pager");
+        pager.innerHTML = "";
+        if (!paginationOn) {
+          pager.innerHTML = `<div class="small">Showing all ${totalRows} rows</div>`;
+          return;
+        }
+        const totalPages = Math.max(1, Math.ceil(totalRows / perPage));
+        // first / prev
+        const first = makeBtn(
+          "<<",
+          () => {
+            currentPage = 1;
+            renderTable();
+          },
+          "btn-xs"
+        );
+        const prev = makeBtn(
+          "<",
+          () => {
+            if (currentPage > 1) {
+              currentPage--;
+              renderTable();
+            }
+          },
+          "btn-xs"
+        );
+        pager.appendChild(first);
+        pager.appendChild(prev);
+        // show pages around current (max 9)
+        let start = Math.max(1, currentPage - 4);
+        let end = Math.min(totalPages, start + 8);
+        if (end - start < 8) start = Math.max(1, end - 8);
+        for (let p = start; p <= end; p++) {
+          const active = p === currentPage;
+          pager.appendChild(
+            makeBtn(
+              String(p),
+              () => {
+                currentPage = p;
+                renderTable();
+              },
+              active ? "btn-xs btn-primary" : "btn-xs btn-outline"
+            )
+          );
+        }
+        const next = makeBtn(
+          ">",
+          () => {
+            if (currentPage < totalPages) {
+              currentPage++;
+              renderTable();
+            }
+          },
+          "btn-xs"
+        );
+        const last = makeBtn(
+          ">>",
+          () => {
+            currentPage = totalPages;
+            renderTable();
+          },
+          "btn-xs"
+        );
+        pager.appendChild(next);
+        pager.appendChild(last);
+        const info = document.createElement("div");
+        info.className = "ml-4 small";
+        info.textContent = `Page ${currentPage} of ${totalPages} — ${totalRows} rows`;
+        pager.appendChild(info);
+      }
+
+      function makeBtn(text, onClick, classes = "btn-xs") {
+        const b = document.createElement("button");
+        b.className = "btn " + classes;
+        b.textContent = text;
+        b.addEventListener("click", onClick);
+        return b;
+      }
+
+      /* -------------------------
+                           Unique order aggregation (WorkOrderNo)
+                        -------------------------*/
+      function buildUniqueOrdersMap(rows) {
+        const map = {};
+        rows.forEach((r) => {
+          const w = getVal(r, ["WorkOrderNo"]) || "__no__" + Math.random();
+          if (!map[w])
+            map[w] = {
+              workOrderNo: w,
+              totalOrderValue: 0,
+              balanceValue: 0,
+              hasPI: false,
+              rows: [],
+            };
+          const val = Number(getVal(r, ["TotalOrderValue", "OrderValue"]) || 0) || 0;
+          map[w].totalOrderValue += val;
+          const bal = Number(getVal(r, ["BalanceValue"]) || 0) || 0;
+          map[w].balanceValue = Math.max(map[w].balanceValue, bal);
+          if (r.CustomerPINo && String(r.CustomerPINo).trim() !== "") map[w].hasPI = true;
+          map[w].rows.push(r);
+        });
+        return map;
+      }
+
+      /* -------------------------
+                           Summary panel & Top lists
+                        -------------------------*/
+      function renderSummary() {
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        const unique = Object.values(uniqueMap);
+        const totalUnique = unique.length;
+        const withPI = unique.filter((u) => u.hasPI).length;
+        const uniqTotalValue = unique.reduce((s, u) => s + (u.totalOrderValue || 0), 0);
+        const uniqTotalBalance = unique.reduce((s, u) => s + (u.balanceValue || 0), 0);
+        const filteredRows = filtered.length;
+
+        const panel = document.getElementById("summaryPanel");
+        panel.innerHTML = `
+                      <div class="p-3 bg-white rounded shadow">Unique Orders<br/><strong>${totalUnique}</strong></div>
+                      <div class="p-3 bg-white rounded shadow">Unique Orders with PI<br/><strong>${withPI}</strong></div>
+                      <div class="p-3 bg-white rounded shadow">Unique Total Order Value<br/><strong>${formatNumber(
+                        uniqTotalValue
+                      )}</strong></div>
+                      <div class="p-3 bg-white rounded shadow">Unique Total Balance<br/><strong>${formatNumber(
+                        uniqTotalBalance
+                      )}</strong></div>
+                      <div class="p-3 bg-white rounded shadow">Filtered Rows<br/><strong>${filteredRows}</strong></div>
+                    `;
+      }
+
+      /* Top lists: top customers, marketing, sections */
+      function renderTopLists() {
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        // marketing
+        const byMkt = {};
+        const byCust = {};
+        const bySection = {};
+        Object.values(uniqueMap).forEach((u) => {
+          const first = u.rows[0] || {};
+          const m = getVal(first, ["MarketingName"]) || "Unknown";
+          const c = getVal(first, ["CName"]) || "Unknown";
+          const cat = getVal(first, ["ProductCategoryName"]) || "Unknown";
+          const sub = getVal(first, ["ProductSubCategoryName"]) || "Unknown";
+          const sect = `${cat} › ${sub}`;
+          byMkt[m] = byMkt[m] || 0;
+          byMkt[m] += u.totalOrderValue || 0;
+          byCust[c] = byCust[c] || 0;
+          byCust[c] += u.totalOrderValue || 0;
+          bySection[sect] = bySection[sect] || 0;
+          bySection[sect] += u.totalOrderValue || 0;
+        });
+        const top = (obj, n = 3) =>
+          Object.entries(obj)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, n);
+
+        const tM = top(byMkt, 5),
+          tC = top(byCust, 5),
+          tS = top(bySection, 5);
+        console.log(tM);
+        let topTotalMktSell = tM.reduce((sum, item) => sum + item[1], 0);
+
+        const container = document.getElementById("topLists");
+        container.innerHTML = `
+
+                    <!-- Top lists -->
+                    <div class="bg-white p-3 rounded shadow w-1/3">
+                  <div class="flex gap-3 mb-4 flex-wrap w-full">
+                    <ul class="bg-white rounded shadow-lg w-full">
+                      <!-- Header -->
+                      <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Top Marketing</li>`;
+        // Append list items dynamically
+        let ul = container.querySelector("ul");
+
+        tM.forEach((e) => {
+          const percent = ((e[1] / topTotalMktSell) * 100).toFixed(2); // 2 decimal
+          let li = document.createElement("li");
+          li.className =
+            "flex justify-between items-center px-4 mb-1 border-b border-gray-300 hover:shadow-md transition";
+          li.innerHTML = `
+    <div class="w-1/3 border-2 border-black">
+      <span>${e[0]}</span>
+      
+    </div>
+    <div class="w-1/3 border-2 border-black text-right">
+      <span>${formatNumber(e[1])}</span>
+      </div>
+    <div class="w-1/3 border-2 border-black text-right">
+      ${percent}%
+    </div>
+  `;
+          ul.appendChild(li);
+        });
+
+        //////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////
+
+        `<!-- Top Customers -->
+                    <div class="bg-white p-3 rounded shadow w-1/3">
+                  <div class="flex gap-3 mb-4 flex-wrap w-full">
+                    <ul class="bg-white rounded shadow-lg w-full">
+                      <!-- Header -->
+                      <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Top Customers</li>`;
+        // Append list items dynamically
+
+        tC.forEach((e) => {
+          const percent = ((e[1] / topTotalMktSell) * 100).toFixed(2); // 2 decimal
+          let li = document.createElement("li");
+          li.className =
+            "flex justify-between items-center px-4 mb-1 border-b border-gray-300 hover:shadow-md transition";
+          li.innerHTML = `
+    <div class="w-1/3 border-2 border-black">
+      <span>${e[0]}</span>
+      
+    </div>
+    <div class="w-1/3 border-2 border-black text-right">
+      <span>${formatNumber(e[1])}</span>
+      </div>
+    <div class="w-1/3 border-2 border-black text-right">
+      ${percent}%
+    </div>
+  `;
+          ul.appendChild(li);
+        });
+        ////////////////////////////////////////////
+        ////////////////////////////////////////////
+        ////////////////////////////////////////////
+        ////////////////////////////////////////////
+        ////////////////////////////////////////////
+        ////////////////////////////////////////////
+        ////////////////////////////////////////////
+
+        ` <!-- Row 1 -->
+
+
+
+                      <div class="bg-white p-3 rounded shadow w-1/3">
+                        <div class="font-semibold">Top Customers</div>
+                        ${tC
+                          .map(([k, v]) => `<div class="small">${k}: <strong>${formatNumber(v)}</strong></div>`)
+                          .join("")}
+                      </div>
+                      <div class="bg-white p-3 rounded shadow w-1/3">
+                        <div class="font-semibold">Top Sections</div>
+                        ${tS
+                          .map(([k, v]) => `<div class="small">${k}: <strong>${formatNumber(v)}</strong></div>`)
+                          .join("")}
+                      </div>
+                    `;
+      }
+
+      /* -------------------------
+                     Charts: render and helpers
+                  -------------------------*/
+      function renderAllCharts() {
+        renderCategoryChart();
+        renderTimeChart();
+        renderPIChart();
+        renderMarketingChart();
+        renderCustomerChart();
+        renderSectionChart();
+      }
+
+      /* Category chart: unique order count, order value, qty */
+      function renderCategoryChart() {
+        const ctx = document.getElementById("chart_cat").getContext("2d");
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        const byCat = {};
+        Object.values(uniqueMap).forEach((u) => {
+          const first = u.rows[0] || {};
+          const cat = getVal(first, ["ProductCategoryName"]) || "Unknown";
+          byCat[cat] = byCat[cat] || { count: 0, value: 0, qty: 0 };
+          byCat[cat].count += 1;
+          byCat[cat].value += u.totalOrderValue || 0;
+          byCat[cat].qty += u.rows.reduce((s, r) => s + Number(getVal(r, ["BreakDownQTY", "OrderQty"]) || 0), 0);
+        });
+        const labels = Object.keys(byCat).sort((a, b) => byCat[b].value - byCat[a].value);
+        const counts = labels.map((l) => byCat[l].count);
+        const values = labels.map((l) => byCat[l].value);
+        const qtys = labels.map((l) => byCat[l].qty);
+
+        if (chart_cat) chart_cat.destroy();
+        chart_cat = new Chart(ctx, {
+          data: {
+            labels,
+            datasets: [
+              {
+                type: "bar",
+                label: "Unique Order Count",
+                data: counts,
+                backgroundColor: "#60a5fa",
+                yAxisID: "A",
+              },
+              {
+                type: "bar",
+                label: "Order Value",
+                data: values,
+                backgroundColor: "#f97316",
+                yAxisID: "B",
+              },
+              {
+                type: "line",
+                label: "Qty",
+                data: qtys,
+                borderColor: "#10b981",
+                fill: false,
+                tension: 0.3,
+                yAxisID: "A",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: "top" },
+              datalabels: {
+                display: true,
+                anchor: "end",
+                align: "top",
+                formatter: (val, ctx) => {
+                  // for values dataset (index 1) show formatted number
+                  const dsIndex = ctx.datasetIndex;
+                  if (dsIndex === 1) return formatNumber(val);
+                  return val;
+                },
+              },
+              tooltip: { mode: "index", intersect: false },
+            },
+            scales: {
+              A: { type: "linear", position: "left", beginAtZero: true },
+              B: { type: "linear", position: "right", beginAtZero: true, grid: { display: false } },
+            },
+          },
+          plugins: [ChartDataLabels],
+        });
+      }
+
+      /* Time chart: unique orders aggregated by day/week/month (first row date) */
+      function renderTimeChart() {
+        const ctx = document.getElementById("chart_time").getContext("2d");
+        const period = document.getElementById("timePeriod").value || "month";
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        const buckets = {};
+        function bucketKey(d) {
+          if (!d) return "Unknown";
+          const dt = new Date(d);
+          if (isNaN(dt)) return d;
+          if (period === "day") return dt.toISOString().slice(0, 10);
+          if (period === "week") {
+            // simple week label: YYYY-Www (approx)
+            const onejan = new Date(dt.getFullYear(), 0, 1);
+            const week = Math.ceil(((dt - onejan) / 86400000 + onejan.getDay() + 1) / 7);
+            return `${dt.getFullYear()}-W${String(week).padStart(2, "0")}`;
+          }
+          // month
+          return dt.toLocaleString("default", { month: "short", year: "numeric" });
+        }
+        Object.values(uniqueMap).forEach((u) => {
+          const first = u.rows[0] || {};
+          const key = bucketKey(getVal(first, ["OrderReceiveDate", "OrderDate"]));
+          if (!buckets[key]) buckets[key] = { count: 0, value: 0 };
+          buckets[key].count += 1;
+          buckets[key].value += u.totalOrderValue || 0;
+        });
+        const labels = Object.keys(buckets);
+        // try sorting labels chronologically when possible
+        const sortedLabels = labels.sort((a, b) => {
+          const da = new Date(a);
+          const db = new Date(b);
+          if (!isNaN(da) && !isNaN(db)) return da - db;
+          return a.localeCompare(b);
+        });
+        const counts = sortedLabels.map((l) => buckets[l].count);
+        const values = sortedLabels.map((l) => buckets[l].value);
+
+        if (chart_time) chart_time.destroy();
+        chart_time = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: sortedLabels,
+            datasets: [
+              { label: "Unique Order Count", data: counts, backgroundColor: "#60a5fa" },
+              { label: "Unique Order Value", data: values, backgroundColor: "#f97316" },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: "top" },
+              datalabels: {
+                display: true,
+                anchor: "end",
+                align: "top",
+                formatter: (v, ctx) => (ctx.datasetIndex === 1 ? formatNumber(v) : v),
+              },
+            },
+          },
+          plugins: [ChartDataLabels],
+        });
+      }
+      document.getElementById("timePeriod").addEventListener("change", renderTimeChart);
+
+      /* PI chart: unique orders with/without PI and their values */
+      function renderPIChart() {
+        const ctx = document.getElementById("chart_pi").getContext("2d");
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        let withPI = 0,
+          withoutPI = 0,
+          valWith = 0,
+          valWithout = 0;
+        Object.values(uniqueMap).forEach((u) => {
+          if (u.hasPI) {
+            withPI++;
+            valWith += u.totalOrderValue || 0;
+          } else {
+            withoutPI++;
+            valWithout += u.totalOrderValue || 0;
+          }
+        });
+        if (chart_pi) chart_pi.destroy();
+        chart_pi = new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: ["With PI", "No PI"],
+            datasets: [{ data: [withPI, withoutPI], backgroundColor: ["#10b981", "#f87171"] }],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: "top" },
+              datalabels: { display: true, formatter: (val, ctx) => val },
+              tooltip: {
+                callbacks: {
+                  afterBody: () => [
+                    `Value With PI: ${formatNumber(valWith)}`,
+                    `Value No PI: ${formatNumber(valWithout)}`,
+                  ],
+                },
+              },
+            },
+          },
+          plugins: [ChartDataLabels],
+        });
+      }
+
+      /* Marketing chart: top N by unique order value/count/delivered */
+      function renderMarketingChart() {
+        const ctx = document.getElementById("chart_marketing").getContext("2d");
+        const topN = Math.max(3, Number(document.getElementById("chartTopN").value || 10));
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        const byMkt = {};
+        Object.values(uniqueMap).forEach((u) => {
+          const first = u.rows[0] || {};
+          const m = getVal(first, ["MarketingName"]) || "Unknown";
+          if (!byMkt[m]) byMkt[m] = { count: 0, value: 0, delivered: 0 };
+          byMkt[m].count += 1;
+          byMkt[m].value += u.totalOrderValue || 0;
+          byMkt[m].delivered += u.rows.reduce((s, r) => s + Number(getVal(r, ["ChallanValue"]) || 0), 0);
+        });
+        const labels = Object.keys(byMkt)
+          .sort((a, b) => byMkt[b].value - byMkt[a].value)
+          .slice(0, topN);
+        const counts = labels.map((l) => byMkt[l].count);
+        const values = labels.map((l) => byMkt[l].value);
+        const delivered = labels.map((l) => byMkt[l].delivered);
+
+        if (chart_marketing) chart_marketing.destroy();
+        chart_marketing = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              { label: "Count", data: counts, backgroundColor: "#60a5fa" },
+              { label: "Value", data: values, backgroundColor: "#f97316" },
+              { label: "Delivered", data: delivered, backgroundColor: "#34d399" },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: "top" },
+              datalabels: {
+                display: true,
+                formatter: (v, ctx) => (ctx.datasetIndex === 1 ? formatNumber(v) : v),
+              },
+            },
+          },
+          plugins: [ChartDataLabels],
+        });
+      }
+
+      /* Customer chart */
+      function renderCustomerChart() {
+        const ctx = document.getElementById("chart_customer").getContext("2d");
+        const topN = Math.max(5, Number(document.getElementById("chartTopN").value || 10));
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        const byCust = {};
+        Object.values(uniqueMap).forEach((u) => {
+          const first = u.rows[0] || {};
+          const c = getVal(first, ["CName"]) || "Unknown";
+          if (!byCust[c]) byCust[c] = { count: 0, value: 0 };
+          byCust[c].count += 1;
+          byCust[c].value += u.totalOrderValue || 0;
+        });
+        const labels = Object.keys(byCust)
+          .sort((a, b) => byCust[b].value - byCust[a].value)
+          .slice(0, topN);
+        const counts = labels.map((l) => byCust[l].count);
+        const values = labels.map((l) => byCust[l].value);
+
+        if (chart_customer) chart_customer.destroy();
+        chart_customer = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              { label: "Count", data: counts, backgroundColor: "#60a5fa" },
+              { label: "Value", data: values, backgroundColor: "#f97316" },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: "top" },
+              datalabels: {
+                display: true,
+                formatter: (v, ctx) => (ctx.datasetIndex === 1 ? formatNumber(v) : v),
+              },
+            },
+          },
+          plugins: [ChartDataLabels],
+        });
+      }
+
+      /* Section chart (Category > Subcategory) */
+      function renderSectionChart() {
+        const ctx = document.getElementById("chart_section").getContext("2d");
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        const bySec = {};
+        Object.values(uniqueMap).forEach((u) => {
+          const first = u.rows[0] || {};
+          const cat = getVal(first, ["ProductCategoryName"]) || "Unknown";
+          const sub = getVal(first, ["ProductSubCategoryName"]) || "Unknown";
+          const key = `${cat} › ${sub}`;
+          if (!bySec[key]) bySec[key] = { count: 0, value: 0 };
+          bySec[key].count += 1;
+          bySec[key].value += u.totalOrderValue || 0;
+        });
+        const entries = Object.entries(bySec)
+          .sort((a, b) => b[1].value - a[1].value)
+          .slice(0, 20);
+        const labels = entries.map((e) => e[0]);
+        const counts = entries.map((e) => e[1].count);
+        const values = entries.map((e) => e[1].value);
+
+        if (chart_section) chart_section.destroy();
+        chart_section = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              { label: "Count", data: counts, backgroundColor: "#60a5fa" },
+              { label: "Value", data: values, backgroundColor: "#f97316" },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: "top" },
+              datalabels: {
+                display: true,
+                formatter: (v, ctx) => (ctx.datasetIndex === 1 ? formatNumber(v) : v),
+              },
+            },
+          },
+          plugins: [ChartDataLabels],
+        });
+      }
+
+      /* Chart context selection (marketing/customer/section) for drill-down */
+      document.getElementById("chartContext").addEventListener("change", () => {
+        const ctx = document.getElementById("chartContext").value;
+        const valSel = document.getElementById("chartContextVal");
+        valSel.innerHTML = '<option value="">(all)</option>';
+        if (ctx === "marketing") {
+          const list = uniqueSorted(filtered.map((r) => r.MarketingName));
+          list.forEach((v) => (valSel.innerHTML += `<option value="${v}">${v}</option>`));
+        } else if (ctx === "customer") {
+          const list = uniqueSorted(filtered.map((r) => r.CName));
+          list.forEach((v) => (valSel.innerHTML += `<option value="${v}">${v}</option>`));
+        } else if (ctx === "section") {
+          const list = uniqueSorted(
+            filtered.map((r) => (r.ProductCategoryName || "") + " › " + (r.ProductSubCategoryName || ""))
+          );
+          list.forEach((v) => (valSel.innerHTML += `<option value="${v}">${v}</option>`));
+        }
+      });
+
+      /* Download visible chart */
+      document.getElementById("downloadChartBtn").addEventListener("click", () => {
+        const canvases = document.querySelectorAll("#chartsModal .chart-pane:not(.hidden) canvas");
+        canvases.forEach((cv, i) => {
+          const url = cv.toDataURL("image/png");
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `chart-${i + 1}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        });
+      });
+      document.getElementById("printChartsBtn").addEventListener("click", () => window.print());
+      document.querySelectorAll("#chartsModal .tab").forEach((b) => {
+        b.addEventListener("click", () => {
+          document.querySelectorAll("#chartsModal .tab").forEach((t) => t.classList.remove("tab-active"));
+          b.classList.add("tab-active");
+          const pane = b.dataset.pane;
+          document.querySelectorAll(".chart-pane").forEach((p) => p.classList.add("hidden"));
+          document.getElementById("chartPane_" + pane).classList.remove("hidden");
+          // render respective chart
+          renderAllCharts();
+        });
+      });
+      document.getElementById("chartsBtn").addEventListener("click", () => {
+        document.getElementById("chartsModal").classList.add("modal-open");
+        renderAllCharts();
+      });
+      document
+        .getElementById("closeChartsBtn")
+        .addEventListener("click", () => document.getElementById("chartsModal").classList.remove("modal-open"));
+
+      /* -------------------------
+                     Exports
+                  -------------------------*/
+      function exportJSON(rows, filename = "export.xlsx") {
+        if (!rows || !rows.length) return alert("No rows to export");
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+        XLSX.writeFile(wb, filename);
+      }
+      document
+        .getElementById("expPage")
+        .addEventListener("click", () => exportJSON(getCurrentPageRows().map(mapExportRow), "CurrentPage.xlsx"));
+      document
+        .getElementById("expAll")
+        .addEventListener("click", () => exportJSON(filtered.map(mapExportRow), "FilteredRows.xlsx"));
+      document.getElementById("expUnique").addEventListener("click", () => {
+        const uniq = Object.values(buildUniqueOrdersMap(filtered)).map((u) => ({
+          WorkOrderNo: u.workOrderNo,
+          TotalOrderValue: u.totalOrderValue,
+          BalanceValue: u.balanceValue,
+          HasPI: u.hasPI,
+        }));
+        exportJSON(uniq, "UniqueOrders.xlsx");
+      });
+      document.getElementById("exportSummaryBtn").addEventListener("click", () => {
+        const uniqueMap = buildUniqueOrdersMap(filtered);
+        const unique = Object.values(uniqueMap);
+        const rows = unique.map((u) => {
+          const first = u.rows[0] || {};
+          return {
+            WorkOrderNo: u.workOrderNo,
+            Customer: getVal(first, ["CName"]),
+            Marketing: getVal(first, ["MarketingName"]),
+            TotalOrderValue: u.totalOrderValue,
+            BalanceValue: u.balanceValue,
+            HasPI: u.hasPI,
+          };
+        });
+        exportJSON(rows, "SummaryUniqueOrders.xlsx");
+      });
+
+      /* convenience: map export row */
+      function mapExportRow(r) {
+        return {
+          OrderDate: formatDate(getVal(r, ["OrderReceiveDate", "OrderDate"])),
+          WorkOrderNo: getVal(r, ["WorkOrderNo"]),
+          Marketing: getVal(r, ["MarketingName"]),
+          Customer: getVal(r, ["CName"]),
+          Category: getVal(r, ["ProductCategoryName"]),
+          Subcategory: getVal(r, ["ProductSubCategoryName"]),
+          PI: getVal(r, ["CustomerPINo"]),
+          OrderQty: getVal(r, ["BreakDownQTY", "OrderQty"]),
+          OrderValue: getVal(r, ["TotalOrderValue", "OrderValue"]),
+          BalanceValue: getVal(r, ["BalanceValue"]),
+        };
+      }
+      function getCurrentPageRows() {
+        if (!paginationOn) return filtered;
+        const start = (currentPage - 1) * perPage;
+        return filtered.slice(start, start + perPage);
+      }
+
+      /* -------------------------
+                     Init & wiring
+                  -------------------------*/
+      (function init() {
+        initColumns();
+        // menu toggles
+        toggleMenu("catBtn", "catMenu");
+        toggleMenu("subBtn", "subMenu");
+        toggleMenu("mktBtn", "mktMenu");
+        toggleMenu("custBtn", "custMenu");
+        // listeners
+        document.getElementById("perPage").addEventListener("change", () => {
+          perPage = Number(document.getElementById("perPage").value);
+          applyFilters();
+        });
+        document.getElementById("togglePagination").addEventListener("change", () => {
+          paginationOn = document.getElementById("togglePagination").checked;
+          applyFilters();
+        });
+        document.getElementById("searchInput").addEventListener("input", () => applyFilters());
+        document.getElementById("piFilter").addEventListener("change", () => applyFilters());
+        document.getElementById("balFilter").addEventListener("change", () => applyFilters());
+        // color toggles re-render
+        ["rowNoPI", "rowBalance", "rowHighest", "colColorNoPI", "colColorBalance", "colColorHighest"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.addEventListener("change", () => renderTable());
+        });
+        // initial empty lists
+        fillFilterLists();
+        renderSummary();
+      })();
+    </script>
+  </body>
+</html>
