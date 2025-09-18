@@ -185,10 +185,13 @@
       <button id="expPage" class="btn btn-primary">Export Current</button>
       <button id="expAll" class="btn btn-secondary">Export All Filtered</button>
       <button id="expUnique" class="btn btn-success">Export Unique Orders</button>
+      <button id="uniqueToggleBtn" class="px-3 py-1 bg-blue-500 text-white rounded">Unique View: OFF</button>
+
 
       <div class="ml-auto flex gap-2 items-center">
         <button id="exportSummaryBtn" class="btn btn-ghost small">Export Summary</button>
       </div>
+      
     </div>
 
     <!-- Loader -->
@@ -305,6 +308,7 @@
                                                                                              ============================ */
       let allData = []; // raw rows from API
       let filtered = []; // filtered rows
+      // let uniqueView = false;
       let currentPage = 1;
       let perPage = parseInt(document.getElementById("perPage").value || 50);
       let paginationOn = true;
@@ -312,6 +316,24 @@
       let colVisible = []; // boolean per column
       let colHighlight = []; // boolean per column (from column modal)
       // ---------------------- Date Defaults ----------------------
+
+
+//       document.getElementById("uniqueToggleBtn").addEventListener("click", () => {
+//   uniqueView = !uniqueView;
+//   document.getElementById("uniqueToggleBtn").innerText = uniqueView ? "Unique View: ON" : "Unique View: OFF";
+//   renderTable(); // refresh table
+// });
+// function getUniqueData(data) {
+//   const map = {};
+//   data.forEach(row => {
+//     const key = row.WorkOrderNo;  // 👈 jeta diye uniqueness nirdharon hobe
+//     console.log(key);
+    
+//     if (!map[key]) map[key] = row;
+//   });
+//   return Object.values(map);
+// }
+
 function setDefaultDates() {
     const today = new Date();
     const start = new Date(today);
@@ -755,8 +777,16 @@ function renderTableHead() {
         const tbody = document.getElementById("tableBody");
         tbody.innerHTML = "";
 
+
+
+
         // sort filtered copy
         const data = [...filtered];
+          // ✅ apply unique filter if toggle is ON
+  // if (uniqueView) {
+  //   data = getUniqueData(data);
+  // }
+
         if (sortConfig.idx >= 0) {
           const map = {
             1: ["OrderReceiveDate", "OrderDate"],
