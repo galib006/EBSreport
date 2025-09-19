@@ -215,12 +215,19 @@
         <button id="exportSummaryBtn" class="btn btn-ghost small">Export Summary</button>
       </div>
     </div>
-
-    <!-- Loader -->
-    <div id="loader" class="loader-overlay hidden">
-      <div class="bg-white rounded p-4 shadow text-center w-64">
-        <div id="loaderText" class="font-semibold">Loading...</div>
-        <div id="loaderProgress" class="text-sm mt-2">0 / 0</div>
+    <!-- Loader Overlay -->
+    <div
+      id="loader"
+      class="hidden fixed inset-0 flex flex-col justify-center items-center bg-[#453b3b5c] bg-opacity-30 z-50"
+    >
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col items-center w-80">
+        <div id="loaderIcon" class="text-3xl mb-4 animate-pulse">🔄</div>
+        <div id="loaderText" class="font-semibold mb-2">Contacting server...</div>
+        <div class="w-full bg-gray-200 rounded-full h-3 mb-2 overflow-hidden">
+          <div id="loaderBar" class="bg-green-500 h-3 w-0 transition-all duration-200"></div>
+        </div>
+        <div id="loaderProgress" class="text-sm text-gray-600 mb-1"></div>
+        <div id="loaderExtra" class="text-xs text-gray-500"></div>
       </div>
     </div>
 
@@ -336,23 +343,6 @@
       let columns = []; // column defs
       let colVisible = []; // boolean per column
       let colHighlight = []; // boolean per column (from column modal)
-      // ---------------------- Date Defaults ----------------------
-
-      //       document.getElementById("uniqueToggleBtn").addEventListener("click", () => {
-      //   uniqueView = !uniqueView;
-      //   document.getElementById("uniqueToggleBtn").innerText = uniqueView ? "Unique View: ON" : "Unique View: OFF";
-      //   renderTable(); // refresh table
-      // });
-      // function getUniqueData(data) {
-      //   const map = {};
-      //   data.forEach(row => {
-      //     const key = row.WorkOrderNo;  // 👈 jeta diye uniqueness nirdharon hobe
-      //     console.log(key);
-
-      //     if (!map[key]) map[key] = row;
-      //   });
-      //   return Object.values(map);
-      // }
       // ------------------ Date picker with dd-mm-yyyy format & min/max restrictions ------------------
       let startPicker, endPicker;
 
@@ -395,9 +385,9 @@
       let chart_cat, chart_time, chart_pi, chart_marketing, chart_customer, chart_section;
 
       /* -------------------------
-                           Column definitions
-                           Each has label and array of potential keys (try in order)
-                        -------------------------*/
+         Column definitions
+       Each has label and array of potential keys (try in order)
+       ------------------------*/
       function initColumns() {
         columns = [
           {
@@ -614,55 +604,51 @@
         if (listId === "custList") document.getElementById("custBtn").innerText = `Customer: ${preview}`;
       }
 
-      /* -------------------------
-                           Fetch & loader
-                        -------------------------*/
-      function showLoader(total = 0, loaded = 0) {
-        document.getElementById("loader").classList.remove("hidden");
-        document.getElementById("loaderText").innerText = "Loading...";
-        document.getElementById("loaderProgress").innerText = `${loaded} / ${total}`;
-      }
+      // -------- Date Pickers --------
+      window.addEventListener("load", () => {
+        const today = new Date();
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(today.getMonth() - 1);
 
-      function updateLoader(loaded, total) {
-        document.getElementById("loaderProgress").innerText = `${loaded} / ${total}`;
-      }
-
-      function hideLoader() {
-        document.getElementById("loader").classList.add("hidden");
-      }
-
-      document.getElementById("saveTokenBtn").addEventListener("click", () => {
-        const token = document.getElementById("tokenInput").value.trim();
-        if (!token) return alert("Enter token");
-        localStorage.setItem("erp_token", token);
-        alert("Token saved locally");
+        startPicker = flatpickr("#startDate", { dateFormat: "d-m-Y", defaultDate: oneMonthAgo, maxDate: today });
+        endPicker = flatpickr("#endDate", { dateFormat: "d-m-Y", defaultDate: today, maxDate: today });
       });
 
+      // -------- Fetch Button Logic --------
       document.getElementById("fetchBtn").addEventListener("click", async () => {
         const token = localStorage.getItem("erp_token");
-        if (!token) return alert("Save token first (enter token and click Save Token)");
+        if (!token) return alert("Save token first");
+
         const sd = startPicker.selectedDates[0];
         const ed = endPicker.selectedDates[0];
         if (!sd || !ed) return alert("Select start and end date");
 
-        if (!sd || !ed) return alert("Select start and end date");
-        showLoader(0, 0);
+        // Stage 1: Request
+        showStage("request");
+
         try {
           const url = `https://tpl-api.ebs365.info/api/OrderReport/BI_OrderRelatedInformationReport?CompanyID=1&ProductCategoryID=0&ProductSubCategoryID=0&MarketingID=0&CustomerID=0&BuyerID=0&JobCardID=0&StartDate=${new Date(
             sd
           ).toISOString()}&EndDate=${new Date(ed).toISOString()}&CommandID=5&EmpID=0`;
-          const res = await fetch(url, {
-            headers: {
-              Authorization: token,
-            },
-          });
-          const body = await res.json();
-          // adapt if API wraps data
+
+          // Stage 2: Download
+          showStage("download", 10, "Connecting to server...");
+          const res = await fetch(url, { headers: { Authorization: token } });
+
+          // Wait a tiny bit for UX smoothness
+          await new Promise((r) => setTimeout(r, 300));
+
+          // Download progress simulation
+          showStage("download", 50, "Receiving response...");
+          const body = await res.json(); // parse directly
           allData = Array.isArray(body) ? body : body.Data || body || [];
-          // normalize fields & numeric conversion
-          allData.forEach((r) => {
-            if (r.OrderReceiveDate && !r.OrderDate) r.OrderDate = r.OrderReceiveDate;
-            // numeric conversions
+
+          // Stage 3: Processing
+          for (let i = 0; i < allData.length; i++) {
+            const row = allData[i];
+
+            if (row.OrderReceiveDate && !row.OrderDate) row.OrderDate = row.OrderReceiveDate;
+
             [
               "UnitPrice",
               "BreakDownQTY",
@@ -674,22 +660,115 @@
               "BalanceQTY",
               "BalanceValue",
             ].forEach((k) => {
-              if (r[k] !== undefined && typeof r[k] === "string") {
-                const n = parseFloat(String(r[k]).replace(/,/g, ""));
-                if (!isNaN(n)) r[k] = n;
+              if (row[k] !== undefined && typeof row[k] === "string") {
+                const n = parseFloat(row[k].replace(/,/g, ""));
+                if (!isNaN(n)) row[k] = n;
               }
             });
-          });
+
+            // Update loader every 50 items or at last item
+            if (i % 50 === 0 || i === allData.length - 1) {
+              const percent = Math.floor(((i + 1) / allData.length) * 100);
+              showStage("processing", percent, `${i + 1} / ${allData.length} items processed`);
+              await new Promise((r) => setTimeout(r, 0)); // smooth animation
+            }
+          }
+
+          // Stage 4: Done
           initColumns();
           fillFilterLists();
           applyFilters();
+
+          showStage("done", 100, `Loaded ${allData.length} items`);
+          setTimeout(hideLoader, 1000); // hide after 1s
         } catch (e) {
           console.error(e);
           alert("Fetch failed — check console");
-        } finally {
           hideLoader();
         }
       });
+
+      // -------- Loader Helper --------
+      function showStage(stage, percent = 0, progressText = "", speedText = "", etaText = "") {
+        const loader = document.getElementById("loader");
+        const loaderText = document.getElementById("loaderText");
+        const loaderBar = document.getElementById("loaderBar");
+        const loaderProgress = document.getElementById("loaderProgress");
+        const loaderExtra = document.getElementById("loaderExtra");
+        const loaderIcon = document.getElementById("loaderIcon");
+
+        loader.classList.remove("hidden");
+
+        // Set stage icon and text
+        if (stage === "request") {
+          // loaderIcon.innerText = "🔄";
+          // loaderText.innerText = "Contacting server...";
+          // loaderBar.style.width = "0%";
+          // loaderProgress.innerText = "Waiting...";
+          // loaderExtra.innerText = "";
+        } else if (stage === "download") {
+          loaderIcon.innerText = "🔄";
+          loaderText.innerText = "Contacting server...";
+          loaderBar.style.width = "0%";
+          loaderProgress.innerText = "Waiting...";
+          loaderExtra.innerText = "";
+          // loaderIcon.innerText = "⬇️";
+          // loaderText.innerText = "Downloading data...";
+          // loaderBar.style.width = percent + "%";
+          // loaderProgress.innerText = progressText;
+          loaderExtra.innerText = `Speed: ${speedText} | ETA: ${etaText}`;
+        } else if (stage === "processing") {
+          loaderIcon.innerText = "⚙️";
+          loaderText.innerText = "Processing data...";
+          loaderBar.style.width = percent + "%";
+          loaderProgress.innerText = progressText;
+          loaderExtra.innerText = "";
+        } else if (stage === "done") {
+          loaderIcon.innerText = "✅";
+          loaderText.innerText = "Done!";
+          loaderBar.style.width = "100%";
+          loaderProgress.innerText = progressText;
+          loaderExtra.innerText = "";
+        }
+      }
+
+      function hideLoader() {
+        const loader = document.getElementById("loader");
+        loader.classList.add("hidden");
+        document.getElementById("loaderBar").style.width = "0%";
+      }
+
+      // -------- Loader Functions --------
+      // function showLoader(stage, percent, progressText, speedText, etaText) {
+      //   const loader = document.getElementById("loader");
+      //   const loaderText = document.getElementById("loaderText");
+      //   const loaderBar = document.getElementById("loaderBar");
+      //   const loaderProgress = document.getElementById("loaderProgress");
+      //   const loaderExtra = document.getElementById("loaderExtra");
+      //   const loaderIcon = document.getElementById("loaderIcon");
+
+      //   loader.classList.remove("hidden");
+
+      //   if (stage === "download") {
+      //     loaderIcon.innerText = "⬇️";
+      //     loaderText.innerText = "Downloading Data...";
+      //   } else if (stage === "processing") {
+      //     loaderIcon.innerText = "⚙️";
+      //     loaderText.innerText = "Processing Data...";
+      //   } else if (stage === "done") {
+      //     loaderIcon.innerText = "✅";
+      //     loaderText.innerText = "Done!";
+      //   }
+
+      //   loaderBar.style.width = percent + "%";
+      //   loaderProgress.innerText = progressText;
+      //   loaderExtra.innerText = stage !== "done" ? `Speed: ${speedText} | ETA: ${etaText}` : "";
+      // }
+
+      // function hideLoader() {
+      //   document.getElementById("loader").classList.add("hidden");
+      //   document.getElementById("loaderBar").style.width = "0%";
+      // }
 
       /* -------------------------
                            Filter logic & apply
