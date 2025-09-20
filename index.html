@@ -531,7 +531,7 @@
           const v = row[k];
 
           // null/undefined/"" হলে fallback
-          if (v === null || v === undefined || v === "" ) continue;
+          if (v === null || v === undefined || v === "") continue;
 
           return v; // 0 বা অন্য valid মান হলে ফেরত দেবে
         }
@@ -980,11 +980,22 @@
             18: ["BalanceQTY"],
             19: ["BalanceValue"],
           };
+
           const keys = map[sortConfig.idx];
           if (keys) {
             data.sort((a, b) => {
               const va = getVal(a, keys, "");
               const vb = getVal(b, keys, "");
+
+              // ✅ Order Date sorting
+              if (sortConfig.idx === 1) {
+                const da = new Date(va);
+                const db = new Date(vb);
+                if (!isNaN(da) && !isNaN(db)) {
+                  return sortConfig.dir * (da - db);
+                }
+              }
+
               const na = parseFloat(va),
                 nb = parseFloat(vb);
               if (!isNaN(na) && !isNaN(nb)) return sortConfig.dir * (na - nb);
