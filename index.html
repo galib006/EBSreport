@@ -345,14 +345,14 @@
       let colHighlight = []; // boolean per column (from column modal)
       // ------------------ Date picker with dd-mm-yyyy format & min/max restrictions ------------------
       let startPicker, endPicker;
-      let tokenInput = document.getElementById('tokenInput');
-      let saveTokenBtn = document.getElementById('saveTokenBtn');
-          saveTokenBtn.addEventListener('click', () => {
-        if(!tokenInput.value){
+      let tokenInput = document.getElementById("tokenInput");
+      let saveTokenBtn = document.getElementById("saveTokenBtn");
+      saveTokenBtn.addEventListener("click", () => {
+        if (!tokenInput.value) {
           alert("Value Mustn't be empty");
-        }else{
-          localStorage.setItem('erp_token',tokenInput.value)
-          tokenInput.value='';
+        } else {
+          localStorage.setItem("erp_token", tokenInput.value);
+          tokenInput.value = "";
         }
       });
       window.addEventListener("load", () => {
@@ -448,6 +448,34 @@
             keys: ["KeyEntry1Value"],
           },
           {
+            label: "Color",
+            keys: ["KeyEntry2Value"],
+          },
+          {
+            label: "PO",
+            keys: ["KeyEntry3Value"],
+          },
+          {
+            label: "Key Entry 4",
+            keys: ["KeyEntry1Value"],
+          },
+          {
+            label: "Key Entry 5",
+            keys: ["KeyEntry5Value"],
+          },
+          {
+            label: "Size",
+            keys: ["KeyEntry6Value"],
+          },
+          {
+            label: "Key Entry 7",
+            keys: ["KeyEntry7Value"],
+          },
+          {
+            label: "Key Entry 8",
+            keys: ["KeyEntry8Value"],
+          },
+          {
             label: "Item Desc",
             keys: ["ItemDescription", "ItemDesc"],
           },
@@ -492,11 +520,18 @@
 
       /* safe accessor: tries keys in order */
       function getVal(row, keys, fallback = "") {
+        if (!row) return fallback;
+
         for (const k of keys) {
           if (k === "SL") continue;
-          if (row === undefined) continue;
-          if (row[k] !== undefined && row[k] !== null) return row[k];
+          const v = row[k];
+
+          // null/undefined/"" হলে fallback
+          if (v === null || v === undefined || v === "" || v === 0) continue;
+
+          return v; // 0 বা অন্য valid মান হলে ফেরত দেবে
         }
+
         return fallback;
       }
 
@@ -694,9 +729,9 @@
           console.error(e);
           alert("Fetch failed — check console");
           hideLoader();
-        } finally{
-          tokenInput.classList.add('hidden');
-          erp_token.classList.add('hidden');
+        } finally {
+          tokenInput.classList.add("hidden");
+          saveTokenBtn.classList.add("hidden");
         }
       });
 
