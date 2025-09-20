@@ -168,7 +168,6 @@
         <option value="zeroBalance">Balance = 0</option>
       </select>
 
-      <input id="searchInput" class="input input-bordered flex-1 min-w-[180px]" placeholder="Search (global)" />
 
       <button id="resetBtn" class="btn btn-warning small">Reset</button>
     </div>
@@ -209,7 +208,10 @@
       <button id="expPage" class="btn btn-primary">Export Current</button>
       <button id="expAll" class="btn btn-secondary">Export All Filtered</button>
       <button id="expUnique" class="btn btn-success">Export Unique Orders</button>
-      <button id="uniqueToggleBtn" class="px-3 py-1 bg-blue-500 text-white rounded">Unique View: OFF</button>
+      <label class="flex items-center gap-2">
+  <input type="checkbox" id="toggleUnique"/> Unique Orders Only
+</label>
+
 
       <div class="ml-auto flex gap-2 items-center">
         <button id="exportSummaryBtn" class="btn btn-ghost small">Export Summary</button>
@@ -233,12 +235,15 @@
 
     <!-- Summary panel -->
     <div id="summaryPanel" class="grid grid-cols-1 md:grid-cols-6 gap-3 mb-4"></div>
+    
+  
     <!-- ///////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////// -->
 
     <div id="topLists" class="flex gap-3 mb-4 w-full"></div>
+     <input id="searchInput" class="input input-bordered w-[800px] mb-5!important border-4 border-black" placeholder="Search (global)" />
     <!-- Table container with scroll -->
     <div class="table-wrap bg-white rounded shadow mb-3">
       <table id="mainTable" class="table table-compact w-full" style="width: 170%">
@@ -329,6 +334,7 @@
         </div>
       </div>
     </div>
+    
 
     <script>
       /* ============================
@@ -336,7 +342,7 @@
                                                                                              ============================ */
       let allData = []; // raw rows from API
       let filtered = []; // filtered rows
-      // let uniqueView = false;
+      let uniqueView = false;
       let currentPage = 1;
       let perPage = parseInt(document.getElementById("perPage").value || 50);
       let paginationOn = true;
@@ -824,6 +830,30 @@
       /* -------------------------
                            Filter logic & apply
                         -------------------------*/
+
+/* ---------- Helper: sumField ---------- */
+function sumFields(rows, fields) {
+  return rows.reduce((sum, row) => {
+    for (const f of fields) {
+      const val = parseFloat(row[f]) || 0;
+      sum += val;
+    }
+    return sum;
+  }, 0);
+}
+     
+/* 🔑 unique order grouping function */
+function buildUniqueOrdersMap(rows) {
+  const map = {};
+  rows.forEach(r => {
+    const key = r.WorkOrderNo || r.JobCardNo || "NO-WO"; // group by WorkOrderNo
+    if (!map[key]) {
+      map[key] = { rows: [] };
+    }
+    map[key].rows.push(r);
+  });
+  return map;
+}
       function readChecked(id) {
         return Array.from(document.querySelectorAll(`#${id} input:checked`)).map((i) => i.value);
       }
@@ -944,128 +974,158 @@
         document.getElementById("colModal").classList.remove("modal-open");
         renderTable();
       });
+      document.getElementById("toggleUnique").addEventListener("change", (e) => {
+  uniqueView = e.target.checked;
+  renderTable();
+});
 
-      /* Render table rows */
-      function renderTable() {
-        renderTableHead();
-        const tbody = document.getElementById("tableBody");
-        tbody.innerHTML = "";
+function sumFields(rows, fields) {
+  return rows.reduce((sum, row) => {
+    fields.forEach(f => {
+      const val = parseFloat(row[f]) || 0;
+      sum += val;
+    });
+    return sum;
+  }, 0);
+}
 
-        // sort filtered copy
-        const data = [...filtered];
-        // ✅ apply unique filter if toggle is ON
-        // if (uniqueView) {
-        //   data = getUniqueData(data);
-        // }
 
-        if (sortConfig.idx >= 0) {
-          const map = {
-            1: ["OrderReceiveDate", "OrderDate"],
-            2: ["WorkOrderNo"],
-            3: ["JobCardNo"],
-            4: ["MarketingName"],
-            5: ["CName"],
-            6: ["FName", "FactoryName"],
-            7: ["BuyerName"],
-            8: ["ProductCategoryName"],
-            9: ["ProductSubCategoryName"],
-            10: ["CustomerPONo", "PONo"],
-            11: ["ItemDescription", "ItemDesc"],
-            12: ["CustomerPINo"],
-            13: ["UnitPrice"],
-            14: ["BreakDownQTY", "OrderQty"],
-            15: ["TotalOrderValue", "OrderValue"],
-            16: ["ChallanQTY"],
-            17: ["ChallanValue"],
-            18: ["BalanceQTY"],
-            19: ["BalanceValue"],
-          };
+function renderTable() {
+  renderTableHead();
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
 
-          const keys = map[sortConfig.idx];
-          if (keys) {
-            data.sort((a, b) => {
-              const va = getVal(a, keys, "");
-              const vb = getVal(b, keys, "");
+  let data = [...filtered];
 
-              // ✅ Order Date sorting
-              if (sortConfig.idx === 1) {
-                const da = new Date(va);
-                const db = new Date(vb);
-                if (!isNaN(da) && !isNaN(db)) {
-                  return sortConfig.dir * (da - db);
-                }
-              }
+  // unique view
+if(uniqueView){
+    const uniqueMap = buildUniqueOrdersMap(filtered);
+    data = Object.values(uniqueMap).map(u => {
+        const base = {...u.rows[0]}; // এখানে আগে row copy হচ্ছিল
+        // console.log(base);
+        
+        base.OrderQty = sumFields(u.rows, ["OrderQty","OrderQty"]);  
+        base.TotalOrderValue = sumFields(u.rows, ["TotalOrderValue","OrderValue"]);
+        base.BalanceQTY = sumFields(u.rows, ["BalanceQTY"]);
+        base.BalanceValue = sumFields(u.rows, ["BalanceValue"]);
+        base.ChallanQTY = sumFields(u.rows, ["ChallanQTY"]);
+        base.ChallanValue = sumFields(u.rows, ["ChallanValue"]);
+        return base;
+    });
+}
 
-              const na = parseFloat(va),
-                nb = parseFloat(vb);
-              if (!isNaN(na) && !isNaN(nb)) return sortConfig.dir * (na - nb);
-              return sortConfig.dir * String(va).localeCompare(String(vb));
-            });
+
+
+
+  // 🔹 sorting
+  if (sortConfig.idx >= 0) {
+    const map = {
+      1: ["OrderReceiveDate", "OrderDate"],
+      2: ["WorkOrderNo"],
+      3: ["JobCardNo"],
+      4: ["MarketingName"],
+      5: ["CName"],
+      6: ["FName", "FactoryName"],
+      7: ["BuyerName"],
+      8: ["ProductCategoryName"],
+      9: ["ProductSubCategoryName"],
+      10: ["CustomerPONo", "PONo"],
+      11: ["ItemDescription", "ItemDesc"],
+      12: ["CustomerPINo"],
+      13: ["UnitPrice"],
+      14: ["OrderQty"],
+      15: ["OrderValue"],
+      16: ["ChallanQTY"],
+      17: ["ChallanValue"],
+      18: ["BalanceQTY"],
+      19: ["BalanceValue"],
+    };
+
+    const keys = map[sortConfig.idx];
+    if (keys) {
+      data.sort((a, b) => {
+        const va = getVal(a, keys, "");
+        const vb = getVal(b, keys, "");
+
+        if (sortConfig.idx === 1) {
+          const da = new Date(va);
+          const db = new Date(vb);
+          if (!isNaN(da) && !isNaN(db)) {
+            return sortConfig.dir * (da - db);
           }
         }
 
-        // pagination
-        perPage = parseInt(document.getElementById("perPage").value || 50);
-        paginationOn = document.getElementById("togglePagination").checked;
-        const start = (currentPage - 1) * perPage;
-        const pageRows = paginationOn ? data.slice(start, start + perPage) : data;
+        const na = parseFloat(va),
+          nb = parseFloat(vb);
+        if (!isNaN(na) && !isNaN(nb)) return sortConfig.dir * (na - nb);
+        return sortConfig.dir * String(va).localeCompare(String(vb));
+      });
+    }
+  }
 
-        // compute unique map for highest etc.
-        const uniqueMap = buildUniqueOrdersMap(filtered);
-        const highestOrderVal = Math.max(0, ...Object.values(uniqueMap).map((u) => u.totalOrderValue || 0));
+  // 🔹 pagination
+  perPage = parseInt(document.getElementById("perPage").value || 50);
+  paginationOn = document.getElementById("togglePagination").checked;
+  const start = (currentPage - 1) * perPage;
+  const pageRows = paginationOn ? data.slice(start, start + perPage) : data;
 
-        pageRows.forEach((r, idx) => {
-          const tr = document.createElement("tr");
-          const noPI = !(r.CustomerPINo && String(r.CustomerPINo).trim() !== "");
-          const hasBalance = Number(r.BalanceQTY || 0) > 0;
-          const orderVal = Number(getVal(r, ["TotalOrderValue", "OrderValue"]) || 0);
-          const isHighest = orderVal === highestOrderVal;
+  // 🔹 highest value বের করার জন্য
+  const uniqueMap = buildUniqueOrdersMap(filtered);
+  const highestOrderVal = Math.max(0, ...Object.values(uniqueMap).map((u) => u.totalOrderValue || 0));
 
-          // cells built according to columns[]; if column hidden, hide cell
-          columns.forEach((col, ci) => {
-            const td = document.createElement("td");
-            td.className = "p-2";
-            let val = "";
-            if (ci === 0) val = start + idx + 1;
-            else {
-              val = getVal(r, col.keys, "");
-              // format
-              if ([13, 14, 15, 16, 17, 18, 19].includes(ci)) {
-                // numeric
-                const n = Number(val);
-                val = isNaN(n) ? val : formatNumber(n);
-              }
-              if (ci === 1) val = formatDate(val);
-            }
-            td.textContent = val;
-            if (!colVisible[ci]) td.style.display = "none";
-            tr.appendChild(td);
-          });
+  // 🔹 render rows
+  pageRows.forEach((r, idx) => {
+    const tr = document.createElement("tr");
+    const noPI = !(r.CustomerPINo && String(r.CustomerPINo).trim() !== "");
+    const hasBalance = Number(r.BalanceQTY || 0) > 0;
+    const orderVal = Number(getVal(r, ["OrderValue"]) || 0);
+    const isHighest = orderVal === highestOrderVal;
 
-          // row highlights (entire row)
-          if (document.getElementById("rowNoPI").checked && noPI) {
-            tr.style.backgroundColor = document.getElementById("colColorNoPI").value;
-          }
-          if (document.getElementById("rowBalance").checked && hasBalance) {
-            tr.style.backgroundColor = document.getElementById("colColorBalance").value;
-          }
-          if (document.getElementById("rowHighest").checked && isHighest) {
-            tr.style.backgroundColor = document.getElementById("colColorHighest").value;
-          }
-
-          // column highlight (apply to td cells matching colHighlight)
-          columns.forEach((c, ci) => {
-            if (colHighlight[ci]) {
-              const cell = tr.children[ci];
-              if (cell) cell.style.boxShadow = "inset 0 0 0 9999px rgba(255,255,0,0.05)";
-            }
-          });
-
-          tbody.appendChild(tr);
-        });
-
-        renderPager(data.length);
+    columns.forEach((col, ci) => {
+      const td = document.createElement("td");
+      td.className = "p-2";
+      let val = "";
+      if (ci === 0) val = start + idx + 1;
+      else {
+        val = getVal(r, col.keys, "");
+        if ([13, 14, 15, 16, 17, 18, 19].includes(ci)) {
+          const n = Number(val);
+          val = isNaN(n) ? val : formatNumber(n);
+        }
+        if (ci === 1) val = formatDate(val);
       }
+      td.textContent = val;
+      if (!colVisible[ci]) td.style.display = "none";
+      tr.appendChild(td);
+    });
+
+    // 🔹 row highlight
+    if (document.getElementById("rowNoPI").checked && noPI) {
+      tr.style.backgroundColor = document.getElementById("colColorNoPI").value;
+    }
+    if (document.getElementById("rowBalance").checked && hasBalance) {
+      tr.style.backgroundColor = document.getElementById("colColorBalance").value;
+    }
+    if (document.getElementById("rowHighest").checked && isHighest) {
+      tr.style.backgroundColor = document.getElementById("colColorHighest").value;
+    }
+
+    // 🔹 column highlight
+    columns.forEach((c, ci) => {
+      if (colHighlight[ci]) {
+        const cell = tr.children[ci];
+        if (cell) cell.style.boxShadow = "inset 0 0 0 9999px rgba(255,255,0,0.05)";
+      }
+    });
+
+    tbody.appendChild(tr);
+  });
+
+  renderPager(data.length);
+}
+
+
+
 
       /* -------------------------
                            Pagination UI
