@@ -345,7 +345,16 @@
       let colHighlight = []; // boolean per column (from column modal)
       // ------------------ Date picker with dd-mm-yyyy format & min/max restrictions ------------------
       let startPicker, endPicker;
-
+      let tokenInput = document.getElementById('tokenInput');
+      let saveTokenBtn = document.getElementById('saveTokenBtn');
+          saveTokenBtn.addEventListener('click', () => {
+        if(!tokenInput.value){
+          alert("Value Mustn't be empty");
+        }else{
+          localStorage.setItem('erp_token',tokenInput.value)
+          tokenInput.value='';
+        }
+      });
       window.addEventListener("load", () => {
         const today = new Date();
         const oneMonthAgo = new Date();
@@ -685,6 +694,9 @@
           console.error(e);
           alert("Fetch failed — check console");
           hideLoader();
+        } finally{
+          tokenInput.classList.add('hidden');
+          erp_token.classList.add('hidden');
         }
       });
 
