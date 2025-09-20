@@ -492,6 +492,10 @@
             keys: ["BreakDownQTY", "OrderQty"],
           },
           {
+            label: "Unit",
+            keys: ["Unit", "Unit"],
+          },
+          {
             label: "Order Value",
             keys: ["TotalOrderValue", "OrderValue"],
           },
@@ -527,7 +531,7 @@
           const v = row[k];
 
           // null/undefined/"" হলে fallback
-          if (v === null || v === undefined || v === "" || v === 0) continue;
+          if (v === null || v === undefined || v === "" ) continue;
 
           return v; // 0 বা অন্য valid মান হলে ফেরত দেবে
         }
