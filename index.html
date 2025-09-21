@@ -35,11 +35,13 @@
         z-index: 20;
       }
 
-      .table-wrap {
-        max-height: 520px;
-        overflow: auto;
-        border-radius: 6px;
-      }
+     .table-wrap {
+  max-height: 520px;
+  overflow: auto;
+  border-radius: 6px;
+  width: 100%;  /* 130% theke 100% kore dilam */
+}
+
 
       th {
         cursor: pointer;
@@ -74,6 +76,9 @@
       .hidden {
         display: none !important;
       }
+      .table-wrap {
+    width: 130%;
+}
     </style>
   </head>
 
@@ -243,10 +248,10 @@
 /////////////////////////////////////////////////// -->
 
     <div id="topLists" class="flex gap-3 mb-4 w-full"></div>
-     <input id="searchInput" class="input input-bordered w-[800px] mb-5!important border-4 border-black" placeholder="Search (global)" />
+     <input id="searchInput" class="input input-bordered w-[800px] mb-5!important border-4 border-black" placeholder="Search (global)" style="margin-bottom: 25px;" />
     <!-- Table container with scroll -->
     <div class="table-wrap bg-white rounded shadow mb-3">
-      <table id="mainTable" class="table table-compact w-full" style="width: 170%">
+      <table id="mainTable" class="table table-compact w-full">
         <thead id="tableHead" class="sticky-header"></thead>
         <tbody id="tableBody"></tbody>
       </table>
